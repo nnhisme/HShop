@@ -1,6 +1,8 @@
 using Du_An_Ecomerce.Data;
 using Du_An_Ecomerce.ViewComponents;
+using Du_An_Ecomerce.ViewModel;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Du_An_Ecomerce.Controllers
 {
@@ -42,8 +44,8 @@ namespace Du_An_Ecomerce.Controllers
                         TenLoai = p.MaLoaiNavigation.TenLoai,
                         TenSanPham = p.TenHh,
                         GiaBan = p.DonGia,
-                        HinhAnh = p.Hinh,
-                        MoTaNgan = p.MoTa
+                        HinhAnh = p.Hinh ?? "",
+                        MoTaNgan = p.MoTaDonVi ?? ""
                     })
                     .ToList();
 
@@ -61,12 +63,40 @@ namespace Du_An_Ecomerce.Controllers
                     TenLoai = p.MaLoaiNavigation.TenLoai,
                     TenSanPham = p.TenHh,
                     GiaBan = p.DonGia,
-                    HinhAnh = p.Hinh,
-                    MoTaNgan = p.MoTa
+                    HinhAnh = p.Hinh ?? "",
+                    MoTaNgan = p.MoTaDonVi ?? ""
                 })
                 .ToList();
 
             return View("Index", products);
+        }
+
+        public async Task<IActionResult> Detail(int id)
+        {
+            var product = await _dbContext.HangHoas
+                            .Include(p => p.MaLoaiNavigation)
+                            .FirstOrDefaultAsync(p => p.MaHh == id);
+
+            if (product == null)
+            {
+                TempData["ErrorMessage"] = "Sản phẩm không tồn tại.";
+                return RedirectToAction("PageNotFound", "Home");
+            }
+
+            var detailProductViewModel = new DetailProductViewProduct
+            {
+                MaSanPham = product.MaHh,
+                TenLoai = product.MaLoaiNavigation.TenLoai,
+                TenSanPham = product.TenHh,
+                GiaBan = product.DonGia,
+                HinhAnh = product.Hinh ?? "",
+                MoTaNgan = product.MoTaDonVi ?? "",
+                MoTaChiTiet = product.MoTa ?? "",
+                SoLuongTon = 10,
+                DiemDanhGia = 5
+            };
+
+            return View(detailProductViewModel);
         }
     }
 }

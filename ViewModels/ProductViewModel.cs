@@ -1,4 +1,4 @@
-namespace Du_An_Ecomerce.ViewComponents
+namespace Du_An_Ecomerce.ViewModel
 {
     public class ProductViewModel
     {
