@@ -1,4 +1,5 @@
 using Du_An_Ecomerce.Data;
+using Du_An_Ecomerce.ViewModel;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,12 +14,6 @@ namespace Du_An_Ecomerce.ViewComponents
             _logger = logger;
             _dbContext = context;
         }
-
-        public IViewComponentResult Invoke()
-        {
-            return View();
-        }
-
         public async Task<IViewComponentResult> InvokeAsync()
         {
             var data = await _dbContext.Loais.Select(l => new MenuViewModel

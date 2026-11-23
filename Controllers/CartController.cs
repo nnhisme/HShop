@@ -13,17 +13,17 @@ namespace Du_An_Ecomerce.Controllers
         {
             get
             {
-                var cartItems = HttpContext.Session.GetObjectFromJson<List<CartItemViewModel>>("CartItems");
+                var cartItems = HttpContext.Session.GetObjectFromJson<List<CartItemViewModel>>(MyConstaint.CartSession);
                 if (cartItems == null)
                 {
                     cartItems = new List<CartItemViewModel>();
-                    HttpContext.Session.SetObjectAsJson("CartItems", cartItems);
+                    HttpContext.Session.SetObjectAsJson(MyConstaint.CartSession, cartItems);
                 }
                 return cartItems;
             }
             set
             {
-                HttpContext.Session.SetObjectAsJson("CartItems", value);
+                HttpContext.Session.SetObjectAsJson(MyConstaint.CartSession, value);
             }
         }
 
@@ -65,7 +65,7 @@ namespace Du_An_Ecomerce.Controllers
                 return Redirect("/404");
             }
 
-            HttpContext.Session.SetObjectAsJson("CartItems", CartItems);
+            HttpContext.Session.SetObjectAsJson(MyConstaint.CartSession, CartItems);
             return View("Index", CartItems);
         }
 
@@ -75,7 +75,7 @@ namespace Du_An_Ecomerce.Controllers
             if (cartItem != null)
             {
                 CartItems.Remove(cartItem);
-                HttpContext.Session.SetObjectAsJson("CartItems", CartItems);
+                HttpContext.Session.SetObjectAsJson(MyConstaint.CartSession, CartItems);
             }
             return RedirectToAction("Index");
         }

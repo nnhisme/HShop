@@ -1,4 +1,5 @@
 using Du_An_Ecomerce.Data;
+using Du_An_Ecomerce.Helpers;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,6 +16,10 @@ builder.Services.AddSession(options =>
     options.Cookie.HttpOnly = true; // Make the session cookie HTTP-only
     options.Cookie.IsEssential = true; // Make the session cookie essential
 });
+
+builder.Services.AddAutoMapper(cfg =>
+{
+}, typeof(AutoMapperProfile));
 
 var app = builder.Build();
 
