@@ -1,5 +1,6 @@
 using Du_An_Ecomerce.Data;
 using Du_An_Ecomerce.Helpers;
+using Du_An_Ecomerce.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 
@@ -38,6 +39,9 @@ new PaypalClient(
     builder.Configuration["PayPalOptions:Mode"]
 )
 );
+
+builder.Services.AddSingleton<VnPayLibrary>();
+builder.Services.AddScoped<IVnPayService, VnPayService>();
 
 var app = builder.Build();
 

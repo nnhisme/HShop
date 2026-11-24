@@ -1,8 +1,10 @@
 using Du_An_Ecomerce.Data;
 using Du_An_Ecomerce.Helpers;
+using Du_An_Ecomerce.Services;
 using Du_An_Ecomerce.ViewModel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Du_An_Ecomerce.Controllers
 {
@@ -29,12 +31,14 @@ namespace Du_An_Ecomerce.Controllers
         }
 
         private readonly PaypalClient _paypalClient;
+        private readonly IVnPayService _vnPayService;
 
-        public CartController(ILogger<CartController> logger, Hshop2023Context dbContext, PaypalClient paypalClient)
+        public CartController(ILogger<CartController> logger, Hshop2023Context dbContext, PaypalClient paypalClient, IVnPayService vnPayService)
         {
             _logger = logger;
             _dbContext = dbContext;
             _paypalClient = paypalClient;
+            _vnPayService = vnPayService;
         }
 
         public IActionResult Index()
@@ -100,38 +104,53 @@ namespace Du_An_Ecomerce.Controllers
 
         [Authorize]
         [HttpPost]
-        public async Task<IActionResult> Checkout(CheckoutViewModel model)
+        [Authorize]
+        [HttpPost]
+        public async Task<IActionResult> Checkout(
+    CheckoutViewModel model,
+    string payment = PaymentType.CODPayment)
         {
+            if (!ModelState.IsValid)
+            {
+                return View(model);
+            }
+
+            var cartItems = CartItems;
+
+            if (cartItems.Count == 0)
+            {
+                return RedirectToAction("Index");
+            }
+
+            var customerId = HttpContext.User.Claims
+                .SingleOrDefault(c => c.Type == "UserId");
+
+            if (customerId == null)
+            {
+                return RedirectToAction("Login", "Account");
+            }
+
             try
             {
-                var cartItems = CartItems;
-                if (cartItems.Count == 0)
-                {
-                    return RedirectToAction("Index");
-                }
-
-                if (!ModelState.IsValid)
-                {
-                    return View(model);
-                }
-
-                // Process the order here (e.g., save to database, send confirmation email, etc.)
-                var customerId = HttpContext.User.Claims.SingleOrDefault(c => c.Type == "UserId");
-                if (customerId == null)
-                {
-                    return RedirectToAction("Login", "Account");
-                }
-
                 if (model.GiongKhachHang)
                 {
-                    var customer = _dbContext.KhachHangs.FirstOrDefault(c => c.MaKh == customerId.Value);
-                    if (customer != null)
+                    var customer = await _dbContext.KhachHangs.FirstOrDefaultAsync(c => c.MaKh == customerId.Value);
+
+                    if (customer == null)
                     {
-                        model.HoTen = customer.HoTen;
-                        model.DiaChi = customer.DiaChi;
-                        model.DienThoai = customer.DienThoai;
+                        ModelState.AddModelError("", "Customer not found.");
+                        return View(model);
                     }
+
+                    model.HoTen = customer.HoTen;
+                    model.DiaChi = customer.DiaChi;
+                    model.DienThoai = customer.DienThoai;
                 }
+
+                decimal totalAmount = (decimal)cartItems.Sum(item =>
+                    (item.GiaBan ?? 0) * item.SoLuong);
+
+                bool isVnPay = payment == PaymentType.VnPayPayment;
 
                 var order = new HoaDon
                 {
@@ -141,41 +160,64 @@ namespace Du_An_Ecomerce.Controllers
                     DiaChi = model.DiaChi,
                     DienThoai = model.DienThoai,
                     GhiChu = model.GhiChu ?? "",
-                    CachThanhToan = "COD", // Example payment method
-                    CachVanChuyen = "Standard", // Example shipping method
-                    PhiVanChuyen = 0, // Example shipping fee
-                    MaTrangThai = 1 // Example order status (e.g., pending)
+                    CachThanhToan = isVnPay ? "VNPay" : "COD",
+                    CachVanChuyen = "Standard",
+                    PhiVanChuyen = 0,
+                    MaTrangThai = 1
                 };
 
-                _dbContext.Database.BeginTransaction();
-
-                _dbContext.HoaDons.Add(order);
-                await _dbContext.SaveChangesAsync();
-
-                var orderDetails = cartItems.Select(item => new ChiTietHd
+                // Lưu đơn hàng và chi tiết trong cùng transaction
+                await using (var transaction =
+                    await _dbContext.Database.BeginTransactionAsync())
                 {
-                    MaHd = order.MaHd,
-                    MaHh = item.MaSanPham,
-                    SoLuong = item.SoLuong,
-                    DonGia = item.GiaBan ?? 0
-                }).ToList();
+                    _dbContext.HoaDons.Add(order);
+                    await _dbContext.SaveChangesAsync();
 
-                _dbContext.ChiTietHds.AddRange(orderDetails);
-                await _dbContext.SaveChangesAsync();
+                    var orderDetails = cartItems.Select(item => new ChiTietHd
+                    {
+                        MaHd = order.MaHd,
+                        MaHh = item.MaSanPham,
+                        SoLuong = item.SoLuong,
+                        DonGia = item.GiaBan ?? 0
+                    }).ToList();
 
-                _dbContext.Database.CommitTransaction();
+                    _dbContext.ChiTietHds.AddRange(orderDetails);
+                    await _dbContext.SaveChangesAsync();
 
-                // Clear the cart after successful checkout
+                    await transaction.CommitAsync();
+                }
+
+                // VNPay: Chuyển sang cổng thanh toán
+                if (isVnPay)
+                {
+                    var vnPayRequest = new VnPaymentRequestModel
+                    {
+                        OrderId = order.MaHd.ToString(),
+                        Amount = totalAmount,
+                        OrderDescription = $"Payment for order {order.MaHd}"
+                    };
+
+                    var paymentUrl = _vnPayService.CreatePaymentUrl(vnPayRequest);
+
+                    return Redirect(paymentUrl);
+                }
+
+                // COD: Hoàn tất đặt hàng
                 CartItems.Clear();
-                HttpContext.Session.SetObjectAsJson(MyConstaint.CartSession, CartItems);
+
+                HttpContext.Session.SetObjectAsJson(
+                    MyConstaint.CartSession, CartItems);
 
                 return RedirectToAction("Success");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during checkout process.");
-                _dbContext.Database.RollbackTransaction();
-                ModelState.AddModelError(string.Empty, "An error occurred while processing your order. Please try again.");
+
+                ModelState.AddModelError(
+                    string.Empty,
+                    "An error occurred while processing your order. Please try again.");
+
                 return View(model);
             }
         }
@@ -260,6 +302,7 @@ namespace Du_An_Ecomerce.Controllers
         [Authorize]
         public async Task<IActionResult> ProcessPaypalPayment([FromBody] PaypalPaymentRequest request)
         {
+            _dbContext.Database.BeginTransaction();
             try
             {
                 var cartItems = CartItems;
@@ -289,8 +332,6 @@ namespace Du_An_Ecomerce.Controllers
                     MaTrangThai = 1
                 };
 
-                _dbContext.Database.BeginTransaction();
-
                 _dbContext.HoaDons.Add(order);
                 await _dbContext.SaveChangesAsync();
 
@@ -318,6 +359,68 @@ namespace Du_An_Ecomerce.Controllers
                 _logger.LogError(ex, "Error during PayPal payment process.");
                 _dbContext.Database.RollbackTransaction();
                 return StatusCode(500, new { success = false, message = "An error occurred while processing your order. Please try again." });
+            }
+        }
+
+        [Authorize]
+        [Authorize]
+        public async Task<IActionResult> PaymentReturn()
+        {
+            try
+            {
+                // Xác thực dữ liệu VNPay trả về
+                var vnPayResponse =
+                    _vnPayService.ProcessPaymentResponse(Request.Query);
+
+                if (!vnPayResponse.Success)
+                {
+                    ViewBag.ErrorMessage =
+                        $"Payment failed. Response code: {vnPayResponse.VnPayResponseCode}";
+
+                    return View("Error");
+                }
+
+                // Tìm đơn hàng theo mã giao dịch
+                var order = await _dbContext.HoaDons
+                    .FirstOrDefaultAsync(o =>
+                        o.MaHd.ToString() == vnPayResponse.OrderId);
+
+                if (order == null)
+                {
+                    ViewBag.ErrorMessage = "Order not found.";
+                    return View("Error");
+                }
+
+                // Kiểm tra phương thức thanh toán
+                if (order.CachThanhToan != "VNPay")
+                {
+                    ViewBag.ErrorMessage = "Invalid payment method.";
+                    return View("Error");
+                }
+
+                // Cập nhật trạng thái đơn hàng
+                if (order.MaTrangThai == 1)
+                {
+                    order.MaTrangThai = 2;
+
+                    await _dbContext.SaveChangesAsync();
+                }
+
+                // Xóa giỏ hàng sau khi thanh toán thành công
+                CartItems.Clear();
+
+                HttpContext.Session.SetObjectAsJson(
+                    MyConstaint.CartSession, CartItems);
+
+                return RedirectToAction("Success");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing VNPay response.");
+
+                ViewBag.ErrorMessage = "An error occurred while processing payment.";
+
+                return View("Error");
             }
         }
     }
