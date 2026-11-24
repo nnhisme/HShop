@@ -1,7 +1,10 @@
+using System.Security.Claims;
 using AutoMapper;
 using Du_An_Ecomerce.Data;
 using Du_An_Ecomerce.Helpers;
 using Du_An_Ecomerce.ViewModel;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Du_An_Ecomerce.Controllers
@@ -65,6 +68,98 @@ namespace Du_An_Ecomerce.Controllers
             }
 
             // Nếu có lỗi, trả về view với thông tin lỗi
+            return View(model);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> DangNhap(string? returnUrl = null)
+        {
+            ViewBag.ReturnUrl = returnUrl; // Lưu trữ URL trả về nếu có
+            return View();
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> DangNhap(LoginViewModel model, string? returnUrl = null)
+        {
+            if (ModelState.IsValid)
+            {
+                // Tìm khách hàng theo tên đăng nhập
+                var khachHang = _dbContext.KhachHangs.FirstOrDefault(u => u.MaKh == model.Username);
+                if (khachHang != null)
+                {
+                    // Kiểm tra mật khẩu
+                    var hashedPassword = model.Password.ToMd5Hash(khachHang.RandomKey);
+                    if (hashedPassword == khachHang.MatKhau)
+                    {
+                        if (!khachHang.HieuLuc)
+                        {
+                            ModelState.AddModelError(string.Empty, "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.");
+                            return View(model);
+                        }
+
+                        var claims = new List<Claim>
+                        {
+                            new Claim(ClaimTypes.Email, khachHang.Email),
+                            new Claim(ClaimTypes.NameIdentifier, khachHang.MaKh),
+                            new Claim(ClaimTypes.Name, khachHang.HoTen),
+                            new Claim(ClaimTypes.Role, khachHang.VaiTro.ToString())
+                        };
+
+                        var claimsIdentity = new ClaimsIdentity(claims, "Login");
+                        var claimsPrincipal = new ClaimsPrincipal(claimsIdentity);
+
+                        await HttpContext.SignInAsync(claimsPrincipal);
+
+                        if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+                        {
+                            return Redirect(returnUrl);
+                        }
+                        else
+                        {
+                            return RedirectToAction("Index", "Home");
+                        }
+                    }
+                }
+
+                // Nếu tên đăng nhập hoặc mật khẩu không đúng, hiển thị thông báo lỗi
+                ModelState.AddModelError(string.Empty, "Tên đăng nhập hoặc mật khẩu không đúng");
+            }
+
+            return View(model);
+        }
+
+        [Authorize]
+        public async Task<IActionResult> DangXuat()
+        {
+            await HttpContext.SignOutAsync();
+            return RedirectToAction("Index", "Home");
+        }
+
+        [Authorize]
+        public async Task<IActionResult> Profile()
+        {
+            var username = User.Identity?.Name;
+            if (string.IsNullOrEmpty(username))
+            {
+                return RedirectToAction("DangNhap", "KhachHang");
+            }
+
+            var khachHang = _dbContext.KhachHangs.FirstOrDefault(u => u.MaKh == username);
+            if (khachHang == null)
+            {
+                return RedirectToAction("DangNhap", "KhachHang");
+            }
+
+            var model = new ProfileViewModel
+            {
+                MaKH = khachHang.MaKh,
+                HoTen = khachHang.HoTen,
+                Email = khachHang.Email,
+                SDT = khachHang.DienThoai ?? "",
+                DiaChi = khachHang.DiaChi ?? "",
+                Hinh = khachHang.Hinh ?? null // Không cần truyền hình ảnh ở đây, vì nó sẽ được xử lý riêng
+            };
+
             return View(model);
         }
     }

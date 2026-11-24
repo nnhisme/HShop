@@ -1,5 +1,6 @@
 using Du_An_Ecomerce.Data;
 using Du_An_Ecomerce.Helpers;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,6 +22,15 @@ builder.Services.AddAutoMapper(cfg =>
 {
 }, typeof(AutoMapperProfile));
 
+// Add authentication services
+builder.Services
+    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/KhachHang/DangNhap";
+        options.AccessDeniedPath = "/KhachHang/AccessDenied";
+    });
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -37,7 +47,7 @@ app.UseStaticFiles();
 app.UseSession(); // Enable session middleware
 app.UseRouting();
 
-
+app.UseAuthentication(); // Enable authentication middleware
 app.UseAuthorization();
 
 app.MapControllerRoute(

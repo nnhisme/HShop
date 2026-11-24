@@ -1,0 +1,106 @@
+@using Du_An_Ecomerce.ViewModel
+@model ProfileViewModel
+
+@{
+    ViewData["Title"] = "Thông tin cá nhân";
+}
+
+<div class="container-fluid py-5">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+
+                <!-- Page Header -->
+                <div class="text-center mb-5">
+                    <h1 class="display-5">Thông tin cá nhân</h1>
+                    <p class="text-muted">Quản lý thông tin tài khoản của bạn</p>
+                </div>
+
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body p-4 p-md-5">
+
+                        <!-- Avatar & Name -->
+                        <div class="text-center mb-4">
+                            <img src="~/Hinh/KhachHang/@(Model.Hinh ?? "default.png")" alt="Ảnh đại diện"
+                                 class="rounded-circle mb-3" style="width: 120px; height: 120px; object-fit: cover;"
+                                 onerror="this.src='/images/default-avatar.png'" />
+
+                            <h3 class="mb-1">@Model.HoTen</h3>
+                            <p class="text-muted mb-0">@Model.Email</p>
+                        </div>
+
+                        <hr class="my-4" />
+
+                        <!-- Personal Information -->
+                        <h5 class="mb-4">
+                            <i class="fa fa-user me-2 text-primary"></i>
+                            Thông tin tài khoản
+                        </h5>
+
+                        <div class="row g-4">
+
+                            <div class="col-md-6">
+                                <label class="form-label text-muted">Mã khách hàng</label>
+                                <div class="form-control bg-light">
+                                    @Model.MaKH
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label text-muted">Họ và tên</label>
+                                <div class="form-control bg-light">
+                                    @Model.HoTen
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label text-muted">Email</label>
+                                <div class="form-control bg-light">
+                                    @Model.Email
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label text-muted">Số điện thoại</label>
+                                <div class="form-control bg-light">
+                                    @(string.IsNullOrEmpty(Model.SDT) ? "Chưa cập nhật" : Model.SDT)
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label text-muted">Địa chỉ</label>
+                                <div class="form-control bg-light">
+                                    @(string.IsNullOrEmpty(Model.DiaChi) ? "Chưa cập nhật" : Model.DiaChi)
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <hr class="my-4" />
+
+                        <!-- Actions -->
+                        <div class="d-flex flex-wrap justify-content-center gap-3">
+                            <a asp-controller="KhachHang" asp-action="EditProfile" class="btn btn-primary px-4 py-2">
+                                <i class="fa fa-edit me-2"></i>
+                                Chỉnh sửa thông tin
+                            </a>
+
+                            <a asp-controller="KhachHang" asp-action="ChangePassword"
+                               class="btn btn-outline-secondary px-4 py-2">
+                                <i class="fa fa-lock me-2"></i>
+                                Đổi mật khẩu
+                            </a>
+
+                            <a asp-controller="KhachHang" asp-action="DangXuat" class="btn btn-danger px-4 py-2">
+                                <i class="fa fa-sign-out-alt me-2"></i>
+                                Đăng xuất
+                            </a>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
